@@ -1,0 +1,62 @@
+# BoardTube
+
+BoardTube is a Go terminal app that searches YouTube and plays audio without
+opening a video window. It targets macOS and Linux.
+
+## Dependencies
+
+- Go 1.24.0 or newer to build
+- [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) for YouTube search and media URL handling
+- [`mpv`](https://mpv.io/) for audio playback
+
+`yt-dlp` is primarily a separate command-line program. Although it can also be
+used as a Python package, this Go app invokes its CLI. `mpv` uses `yt-dlp` to
+resolve a YouTube page to a media stream, then plays only its audio.
+
+On macOS:
+
+```sh
+brew install yt-dlp mpv
+```
+
+## Build and run
+
+```sh
+cd ~/projects/boardtube
+go build -o boardtube .
+./boardtube
+```
+
+An initial search can be supplied on the command line:
+
+```sh
+./boardtube "boards of canada"
+```
+
+## Keys
+
+| Key | Action |
+| --- | --- |
+| `Tab` | Switch between Results and Playlist |
+| `↑`/`↓` or `j`/`k` | Select an item in the active pane |
+| `Enter` | Play the selected result or playlist item |
+| `a` | Add the selected result to the end of the playlist |
+| `J`/`K` | Move the selected playlist item down/up |
+| `d` | Remove the selected playlist item |
+| `n` | Play the next playlist item |
+| `b` | Play the previous track from the beginning |
+| `←`/`→` | Seek backward/forward 10 seconds |
+| `Space` | Pause or resume current track |
+| `p` | Resume, or play the selected result |
+| `x` | Stop |
+| `/` or `s` | New search |
+| `Ctrl-C` | Quit |
+
+The playlist is manual, allows duplicates, and lasts only for the current app
+session. Tracks remain in the list after playback and are marked `Played`,
+`Playing`, or `Queued`. A track finishing normally starts the next playlist
+item. Playlist saving is not currently supported.
+
+The app streams media and does not save it. YouTube changes can affect search
+or playback, so keep `yt-dlp` current. While playing, the footer shows the
+current track, elapsed time, total duration, progress bar, and controls.
