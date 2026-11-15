@@ -92,6 +92,7 @@ const (
 type model struct {
 	query              string
 	input              string
+	inputCursor        int
 	searching          bool
 	enteringSearch     bool
 	results            []video
@@ -116,6 +117,7 @@ func initialModel(query string) model {
 	m := model{
 		query:         query,
 		input:         query,
+		inputCursor:   len([]rune(query)),
 		playlistIndex: -1,
 		status:        "Press / to search",
 	}
@@ -318,10 +320,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "/":
 			m.enteringSearch = true
 			m.input = m.query
+			m.inputCursor = len([]rune(m.input))
 			m.status = "Type a search and press Enter"
 		case "s":
 			m.enteringSearch = true
 			m.input = ""
+			m.inputCursor = 0
 			m.status = "Type a search and press Enter"
 		case "tab":
 			if m.activePane == resultsPane {
@@ -433,10 +437,8 @@ func (m model) updatePlaylistKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) updateSearchInput(key tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if key.Type == tea.KeySpace {
-		m.input += " "
-		return m, nil
-	}
+	runes := []rune(m.input)
+	m.inputCursor = min(max(m.inputCursor, 0), len(runes))
 
 	switch key.String() {
 	case "ctrl+c":
@@ -458,15 +460,32 @@ func (m model) updateSearchInput(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.selected = 0
 		m.status = fmt.Sprintf("Searching for %q...", query)
 		return m, searchCmd(query)
+	case "left":
+		m.inputCursor = max(0, m.inputCursor-1)
+	case "right":
+		m.inputCursor = min(len(runes), m.inputCursor+1)
+	case "home", "ctrl+a":
+		m.inputCursor = 0
+	case "end", "ctrl+e":
+		m.inputCursor = len(runes)
 	case "backspace", "ctrl+h":
-		runes := []rune(m.input)
-		if len(runes) > 0 {
-			m.input = string(runes[:len(runes)-1])
+		if m.inputCursor > 0 {
+			m.input = string(runes[:m.inputCursor-1]) + string(runes[m.inputCursor:])
+			m.inputCursor--
+		}
+	case "delete":
+		if m.inputCursor < len(runes) {
+			m.input = string(runes[:m.inputCursor]) + string(runes[m.inputCursor+1:])
 		}
 	default:
-		if key.Type == tea.KeyRunes {
-			m.input += string(key.Runes)
+		insert := key.Runes
+		if key.Type == tea.KeySpace {
+			insert = []rune{' '}
+		} else if key.Type != tea.KeyRunes {
+			return m, nil
 		}
+		m.input = string(runes[:m.inputCursor]) + string(insert) + string(runes[m.inputCursor:])
+		m.inputCursor += len(insert)
 	}
 	return m, nil
 }
@@ -745,7 +764,14 @@ func (m model) View() string {
 	var b strings.Builder
 	b.WriteString(ansiStyle(bbsTitle, "◆ BoardTube ◆") + "\n")
 	if m.enteringSearch {
-		b.WriteString(ansiStyle(bbsLabel, "Search: ") + ansiStyle(bbsValue, m.input) + ansiStyle(bbsSelected, " ") + "\n")
+		runes := []rune(m.input)
+		cursor := min(max(m.inputCursor, 0), len(runes))
+		caret, suffix := " ", ""
+		if cursor < len(runes) {
+			caret = string(runes[cursor])
+			suffix = string(runes[cursor+1:])
+		}
+		b.WriteString(ansiStyle(bbsLabel, "Search: ") + ansiStyle(bbsValue, string(runes[:cursor])) + ansiStyle(bbsSelected, caret) + ansiStyle(bbsValue, suffix) + "\n")
 	} else {
 		b.WriteString(ansiStyle(bbsLabel, "Search: ") + ansiStyle(bbsValue, valueOr(m.query, "(none)")) + "\n")
 	}

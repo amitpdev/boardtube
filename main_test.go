@@ -70,6 +70,35 @@ func TestSlashPreservesCurrentSearchText(t *testing.T) {
 	}
 }
 
+func TestSearchCursorEditing(t *testing.T) {
+	m := initialModel("café music")
+	m.enteringSearch = true
+	steps := []struct {
+		key    tea.KeyMsg
+		want   string
+		cursor int
+	}{
+		{tea.KeyMsg{Type: tea.KeyHome}, "café music", 0},
+		{tea.KeyMsg{Type: tea.KeyLeft}, "café music", 0},
+		{tea.KeyMsg{Type: tea.KeyBackspace}, "café music", 0},
+		{tea.KeyMsg{Type: tea.KeyRight}, "café music", 1},
+		{tea.KeyMsg{Type: tea.KeyDelete}, "cfé music", 1},
+		{tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("afé")}, "caféfé music", 4},
+		{tea.KeyMsg{Type: tea.KeyBackspace}, "caffé music", 3},
+		{tea.KeyMsg{Type: tea.KeySpace}, "caf fé music", 4},
+		{tea.KeyMsg{Type: tea.KeyEnd}, "caf fé music", 12},
+		{tea.KeyMsg{Type: tea.KeyRight}, "caf fé music", 12},
+		{tea.KeyMsg{Type: tea.KeyDelete}, "caf fé music", 12},
+	}
+	for i, step := range steps {
+		updated, cmd := m.Update(step.key)
+		m = updated.(model)
+		if cmd != nil || m.input != step.want || m.inputCursor != step.cursor {
+			t.Fatalf("step %d: input=%q cursor=%d cmd present=%v; want %q cursor=%d", i, m.input, m.inputCursor, cmd != nil, step.want, step.cursor)
+		}
+	}
+}
+
 func TestArrowSeekWithoutPlayback(t *testing.T) {
 	m := initialModel("query")
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRight})

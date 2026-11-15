@@ -52,6 +52,11 @@ An initial search can be supplied on the command line:
 | `/` or `s` | New search |
 | `Ctrl-C` | Quit |
 
+While editing a search, use `←`/`→` to move the cursor, `Home`/`End` (or
+`Ctrl-A`/`Ctrl-E`) to jump to the start/end, and `Backspace`/`Delete` to remove
+text before/at the cursor. Press `/` to edit the current query or `s` to start
+a blank search.
+
 The playlist is manual, allows duplicates, and lasts only for the current app
 session. Tracks remain in the list after playback and are marked `Played`,
 `Playing`, or `Queued`. A track finishing normally starts the next playlist
