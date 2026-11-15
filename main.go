@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -20,22 +21,22 @@ const (
 	seekStepSeconds = 10
 
 	ansiReset       = "\033[0m"
-	bbsTitle        = "\033[1;95m"
-	bbsLabel        = "\033[1;96m"
-	bbsValue        = "\033[93m"
-	bbsGood         = "\033[1;92m"
-	bbsWarning      = "\033[1;93m"
-	bbsError        = "\033[1;91m"
-	bbsActiveTab    = "\033[1;97;45m"
-	bbsInactiveTab  = "\033[96m"
-	bbsSelected     = "\033[1;30;106m"
-	bbsPlayed       = "\033[2;37m"
-	bbsPlaying      = "\033[1;92m"
-	bbsQueued       = "\033[96m"
-	bbsControls     = "\033[1;93m"
-	bbsHints        = "\033[2;96m"
-	bbsProgress     = "\033[96m"
-	bbsEmptyPlaying = "\033[2;37m"
+	bbsTitle        = "\033[38;5;139m"
+	bbsLabel        = "\033[38;5;109m"
+	bbsValue        = "\033[38;5;252m"
+	bbsGood         = "\033[38;5;108m"
+	bbsWarning      = "\033[38;5;180m"
+	bbsError        = "\033[38;5;174m"
+	bbsActiveTab    = "\033[38;5;253;48;5;60m"
+	bbsInactiveTab  = "\033[38;5;245m"
+	bbsSelected     = "\033[38;5;253;48;5;60m"
+	bbsPlayed       = "\033[38;5;243m"
+	bbsPlaying      = "\033[38;5;139m"
+	bbsQueued       = "\033[38;5;250m"
+	bbsControls     = "\033[38;5;250m"
+	bbsHints        = "\033[38;5;245m"
+	bbsProgress     = "\033[38;5;109m"
+	bbsEmptyPlaying = "\033[38;5;243m"
 )
 
 type video struct {
@@ -93,6 +94,7 @@ type model struct {
 	query              string
 	input              string
 	inputCursor        int
+	theme              palette
 	searching          bool
 	enteringSearch     bool
 	results            []video
@@ -115,6 +117,7 @@ type model struct {
 
 func initialModel(query string) model {
 	m := model{
+		theme:         themes["retro"],
 		query:         query,
 		input:         query,
 		inputCursor:   len([]rune(query)),
@@ -761,8 +764,12 @@ func (m model) View() string {
 		return "Starting...\n"
 	}
 
+	theme := m.theme
+	if theme.Title == "" {
+		theme = themes["retro"]
+	}
 	var b strings.Builder
-	b.WriteString(ansiStyle(bbsTitle, "◆ BoardTube ◆") + "\n")
+	b.WriteString(ansiStyle(theme.Title, "◆ BoardTube ◆") + "\n")
 	if m.enteringSearch {
 		runes := []rune(m.input)
 		cursor := min(max(m.inputCursor, 0), len(runes))
@@ -771,20 +778,20 @@ func (m model) View() string {
 			caret = string(runes[cursor])
 			suffix = string(runes[cursor+1:])
 		}
-		b.WriteString(ansiStyle(bbsLabel, "Search: ") + ansiStyle(bbsValue, string(runes[:cursor])) + ansiStyle(bbsSelected, caret) + ansiStyle(bbsValue, suffix) + "\n")
+		b.WriteString(ansiStyle(theme.Label, "Search: ") + ansiStyle(theme.Value, string(runes[:cursor])) + ansiStyle(theme.Selected, caret) + ansiStyle(theme.Value, suffix) + "\n")
 	} else {
-		b.WriteString(ansiStyle(bbsLabel, "Search: ") + ansiStyle(bbsValue, valueOr(m.query, "(none)")) + "\n")
+		b.WriteString(ansiStyle(theme.Label, "Search: ") + ansiStyle(theme.Value, valueOr(m.query, "(none)")) + "\n")
 	}
-	b.WriteString(colorStatus(m.status) + "\n\n")
+	b.WriteString(theme.colorStatus(m.status) + "\n\n")
 
 	resultsTab := "Results"
 	playlistTab := fmt.Sprintf("Playlist (%d)", len(m.playlist))
 	if m.activePane == resultsPane {
-		resultsTab = ansiStyle(bbsActiveTab, " "+resultsTab+" ")
-		playlistTab = ansiStyle(bbsInactiveTab, playlistTab)
+		resultsTab = ansiStyle(theme.ActiveTab, " "+resultsTab+" ")
+		playlistTab = ansiStyle(theme.InactiveTab, playlistTab)
 	} else {
-		resultsTab = ansiStyle(bbsInactiveTab, resultsTab)
-		playlistTab = ansiStyle(bbsActiveTab, " "+playlistTab+" ")
+		resultsTab = ansiStyle(theme.InactiveTab, resultsTab)
+		playlistTab = ansiStyle(theme.ActiveTab, " "+playlistTab+" ")
 	}
 	b.WriteString(resultsTab + "  " + playlistTab + "\n")
 
@@ -830,18 +837,18 @@ func (m model) View() string {
 		}
 		line = truncate(line, m.width)
 		if i == selected {
-			b.WriteString(ansiStyle(bbsSelected, line))
+			b.WriteString(ansiStyle(theme.Selected, line))
 		} else if m.activePane == playlistPane {
 			switch m.playlistTrackState(i) {
 			case "Played":
-				b.WriteString(ansiStyle(bbsPlayed, line))
+				b.WriteString(ansiStyle(theme.Played, line))
 			case "Playing":
-				b.WriteString(ansiStyle(bbsPlaying, line))
+				b.WriteString(ansiStyle(theme.Playing, line))
 			default:
-				b.WriteString(ansiStyle(bbsQueued, line))
+				b.WriteString(ansiStyle(theme.Queued, line))
 			}
 		} else {
-			b.WriteString(ansiStyle(bbsInactiveTab, line))
+			b.WriteString(ansiStyle(theme.InactiveTab, line))
 		}
 		b.WriteByte('\n')
 	}
@@ -851,19 +858,19 @@ func (m model) View() string {
 			b.WriteByte('\n')
 		}
 		title := "Nothing playing"
-		titleStyle := bbsEmptyPlaying
+		titleStyle := theme.EmptyPlaying
 		if m.nowPlaying != nil {
 			title = "Now playing: " + m.nowPlaying.Title
-			titleStyle = bbsPlaying
+			titleStyle = theme.Playing
 		}
 		b.WriteString(ansiStyle(titleStyle, truncate(title, m.width)) + "\n")
-		b.WriteString(ansiStyle(bbsProgress, renderProgress(m.position, m.duration, m.width)) + "\n")
+		b.WriteString(ansiStyle(theme.Progress, renderProgress(m.position, m.duration, m.width)) + "\n")
 		if m.activePane == resultsPane {
-			b.WriteString(ansiStyle(bbsControls, "[x Stop]  [Space Pause]  [←/→ Seek]  [p Play]  [a Add]  [b Previous]  [n Next]") + "\n")
-			b.WriteString(ansiStyle(bbsHints, "↑/↓ or j/k select  Enter play  a add  Tab playlist  / search  Ctrl+C quit"))
+			b.WriteString(ansiStyle(theme.Controls, "[x Stop]  [Space Pause]  [←/→ Seek]  [p Play]  [a Add]  [b Previous]  [n Next]") + "\n")
+			b.WriteString(ansiStyle(theme.Hints, "↑/↓ or j/k select  Enter play  a add  Tab playlist  / search  Ctrl+C quit"))
 		} else {
-			b.WriteString(ansiStyle(bbsControls, "[x Stop]  [Space Pause]  [←/→ Seek]  [p Play]  [b Previous]  [n Next]") + "\n")
-			b.WriteString(ansiStyle(bbsHints, "j/k select  J/K reorder  d remove  Enter play  Tab results  / search  Ctrl+C quit"))
+			b.WriteString(ansiStyle(theme.Controls, "[x Stop]  [Space Pause]  [←/→ Seek]  [p Play]  [b Previous]  [n Next]") + "\n")
+			b.WriteString(ansiStyle(theme.Hints, "j/k select  J/K reorder  d remove  Enter play  Tab results  / search  Ctrl+C quit"))
 		}
 	}
 	return b.String()
@@ -873,16 +880,16 @@ func ansiStyle(style, value string) string {
 	return style + value + ansiReset
 }
 
-func colorStatus(status string) string {
-	style := bbsWarning
+func (theme palette) colorStatus(status string) string {
+	style := theme.Warning
 	switch {
 	case strings.Contains(status, "error"), strings.HasPrefix(status, "Cannot"):
-		style = bbsError
+		style = theme.Error
 	case strings.HasPrefix(status, "Playing"),
 		strings.HasPrefix(status, "Added"),
 		strings.HasPrefix(status, "Seeked"),
 		status == "Playback finished":
-		style = bbsGood
+		style = theme.Good
 	}
 	return ansiStyle(style, status)
 }
@@ -990,13 +997,22 @@ func diagnosticLine(output string) string {
 }
 
 func main() {
+	options, err := parseOptions(os.Args[1:], os.Stderr)
+	if errors.Is(err, flag.ErrHelp) {
+		return
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
 	if err := checkDependencies(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
-	query := strings.TrimSpace(strings.Join(os.Args[1:], " "))
-	program := tea.NewProgram(initialModel(query), tea.WithAltScreen())
+	m := initialModel(options.query)
+	m.theme = themes[options.theme]
+	program := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err := program.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "application error:", err)
 		os.Exit(1)

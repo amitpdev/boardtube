@@ -33,6 +33,29 @@ An initial search can be supplied on the command line:
 ./boardtube "boards of canada"
 ```
 
+## Color themes
+
+Choose a theme with `--theme`, before the search query:
+
+```sh
+./boardtube --theme mono
+./boardtube --theme ocean "boards of canada"
+./boardtube --theme=matrix "ambient music"
+./boardtube --help
+```
+
+| Theme | Palette |
+| --- | --- |
+| `retro` | Dusty mauve and muted teal (default) |
+| `ocean` | Midnight blue highlights and muted steel-blue text |
+| `sunset` | Warm sand and dusty rose |
+| `matrix` | Muted sage text with phosphor-green title and controls |
+| `mono` | Black and white, with bold/underline status distinctions |
+
+Use `--` before a query that starts with a dash, such as
+`./boardtube --theme mono -- --help`. Themes apply to the app's text and
+highlights; the terminal supplies the background. There is no config file.
+
 ## Keys
 
 | Key | Action |
