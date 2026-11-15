@@ -77,6 +77,12 @@ type controlDoneMsg struct {
 	err        error
 }
 
+type volumeDoneMsg struct {
+	generation int
+	volume     int
+	err        error
+}
+
 type seekDoneMsg struct {
 	generation int
 	offset     int
@@ -112,6 +118,8 @@ type model struct {
 	duration           float64
 	ipcSocket          string
 	paused             bool
+	volume             int
+	volumeUpdating     bool
 	playbackGeneration int
 }
 
@@ -122,6 +130,7 @@ func initialModel(query string) model {
 		input:         query,
 		inputCursor:   len([]rune(query)),
 		playlistIndex: -1,
+		volume:        100,
 		status:        "Press / to search",
 	}
 	if query == "" {
@@ -292,6 +301,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case volumeDoneMsg:
+		if msg.generation != m.playbackGeneration || m.player == nil {
+			return m, nil
+		}
+		m.volumeUpdating = false
+		if msg.err != nil {
+			m.status = "Volume control error: " + msg.err.Error()
+			return m, nil
+		}
+		if msg.volume != m.volume {
+			return m, m.updateVolume()
+		}
+		return m, nil
+
 	case seekDoneMsg:
 		if msg.generation != m.playbackGeneration || m.player == nil {
 			return m, nil
@@ -338,6 +361,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case " ":
 			return m, m.setPaused(!m.paused)
+		case "-":
+			return m, m.changeVolume(-5)
+		case "+", "=":
+			return m, m.changeVolume(5)
 		case "left":
 			return m, m.seek(-seekStepSeconds)
 		case "right":
@@ -519,6 +546,8 @@ func (m *model) startVideo(selected video) tea.Cmd {
 		"--no-video",
 		"--force-window=no",
 		"--really-quiet",
+		fmt.Sprintf("--volume=%d", m.volume),
+		"--volume-max=100",
 		"--input-ipc-server="+socket,
 		"--",
 		selected.URL(),
@@ -538,6 +567,7 @@ func (m *model) startVideo(selected video) tea.Cmd {
 	m.position = 0
 	m.duration = selected.Duration
 	m.ipcSocket = socket
+	m.volumeUpdating = false
 	m.paused = false
 	m.status = "Playing: " + selected.Title
 
@@ -661,6 +691,24 @@ func (m *model) setPaused(paused bool) tea.Cmd {
 	return func() tea.Msg {
 		err := sendMPVCommand(socket, []any{"set_property", "pause", paused})
 		return controlDoneMsg{generation: generation, paused: paused, err: err}
+	}
+}
+
+// Keep one volume request in flight so rapid key presses cannot apply out of order.
+func (m *model) changeVolume(delta int) tea.Cmd {
+	m.volume = min(100, max(0, m.volume+delta))
+	return m.updateVolume()
+}
+
+func (m *model) updateVolume() tea.Cmd {
+	if m.player == nil || m.player.Process == nil || m.volumeUpdating {
+		return nil
+	}
+	m.volumeUpdating = true
+	generation, socket, volume := m.playbackGeneration, m.ipcSocket, m.volume
+	return func() tea.Msg {
+		err := sendMPVCommand(socket, []any{"set_property", "volume", volume})
+		return volumeDoneMsg{generation: generation, volume: volume, err: err}
 	}
 }
 
@@ -864,12 +912,12 @@ func (m model) View() string {
 			titleStyle = theme.Playing
 		}
 		b.WriteString(ansiStyle(titleStyle, truncate(title, m.width)) + "\n")
-		b.WriteString(ansiStyle(theme.Progress, renderProgress(m.position, m.duration, m.width)) + "\n")
+		b.WriteString(ansiStyle(theme.Progress, renderProgress(m.position, m.duration, max(0, m.width-15))+fmt.Sprintf("  Volume: %d%%", m.volume)) + "\n")
 		if m.activePane == resultsPane {
-			b.WriteString(ansiStyle(theme.Controls, "[x Stop]  [Space Pause]  [←/→ Seek]  [p Play]  [a Add]  [b Previous]  [n Next]") + "\n")
+			b.WriteString(ansiStyle(theme.Controls, "[x Stop]  [Space Pause]  [←/→ Seek]  [-/+ Volume]  [p Play]  [a Add]  [b Previous]  [n Next]") + "\n")
 			b.WriteString(ansiStyle(theme.Hints, "↑/↓ or j/k select  Enter play  a add  Tab playlist  / search  Ctrl+C quit"))
 		} else {
-			b.WriteString(ansiStyle(theme.Controls, "[x Stop]  [Space Pause]  [←/→ Seek]  [p Play]  [b Previous]  [n Next]") + "\n")
+			b.WriteString(ansiStyle(theme.Controls, "[x Stop]  [Space Pause]  [←/→ Seek]  [-/+ Volume]  [p Play]  [b Previous]  [n Next]") + "\n")
 			b.WriteString(ansiStyle(theme.Hints, "j/k select  J/K reorder  d remove  Enter play  Tab results  / search  Ctrl+C quit"))
 		}
 	}

@@ -69,6 +69,7 @@ highlights; the terminal supplies the background. There is no config file.
 | `n` | Play the next playlist item |
 | `b` | Play the previous track from the beginning |
 | `←`/`→` | Seek backward/forward 10 seconds |
+| `-` / `+` (or `=`) | Lower / raise playback volume by 5% |
 | `Space` | Pause or resume current track |
 | `p` | Resume, or play the selected result |
 | `x` | Stop |
@@ -79,6 +80,10 @@ While editing a search, use `←`/`→` to move the cursor, `Home`/`End` (or
 `Ctrl-A`/`Ctrl-E`) to jump to the start/end, and `Backspace`/`Delete` to remove
 text before/at the cursor. Press `/` to edit the current query or `s` to start
 a blank search.
+
+Playback volume starts at 100%, ranges from 0–100%, and carries across tracks
+for the current session. These controls change mpv volume only, leaving macOS
+/system volume unchanged. While editing a search, these keys enter text.
 
 The playlist is manual, allows duplicates, and lasts only for the current app
 session. Tracks remain in the list after playback and are marked `Played`,
